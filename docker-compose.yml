@@ -1,0 +1,79 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: educircle_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       mydatabase      # matches spring.datasource.url
+      POSTGRES_USER:     postgres      # matches spring.datasource.username
+      POSTGRES_PASSWORD: root            # matches spring.datasource.password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U educircle -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO (object storage for notes/files) ──────────────
+  minio:
+    image: minio/minio:latest
+    container_name: educircle_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     minioadmin    # matches minio.access-key
+      MINIO_ROOT_PASSWORD: minioadmin    # matches minio.secret-key
+    ports:
+      - "9000:9000"   # API  — matches minio.url=http://localhost:9000
+      - "9001:9001"   # Web console — open http://localhost:9001
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (JWT blacklist + caching) ─────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: educircle_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── pgAdmin (optional — visual DB manager) ──────────────
+  # Remove this block if you have pgAdmin installed locally
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: educircle_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@educircle.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"   # Open: http://localhost:5050
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  minio_data:
+  redis_data:
+  pgadmin_data:
